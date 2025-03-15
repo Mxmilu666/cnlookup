@@ -42,18 +42,21 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: cnlookup-${{ matrix.os }}-${{ matrix.arch }}
           path: "*.tar.gz"
 
   create-release:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Download Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: binaries
-          path: .
+          path: ./artifacts
+
+      - name: Prepare Release Files
+        run: |
+          find ./artifacts -name "*.tar.gz" -exec cp {} . \;
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
