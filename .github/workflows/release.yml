@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.21"
+
+      - name: Build for multiple platforms
+        run: |
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -v -ldflags="-s -w" -o cnlookup-linux-arm64
+
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-windows-amd64.exe
+
+          # macOS
+          GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-darwin-amd64
+          GOOS=darwin GOARCH=arm64 go build -v -ldflags="-s -w" -o cnlookup-darwin-arm64
+
+      - name: Generate checksums
+        run: |
+          sha256sum cnlookup-* > SHA256SUMS.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            cnlookup-linux-amd64
+            cnlookup-linux-arm64
+            cnlookup-windows-amd64.exe
+            cnlookup-darwin-amd64
+            cnlookup-darwin-arm64
+            SHA256SUMS.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
