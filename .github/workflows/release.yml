@@ -4,45 +4,61 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, windows, darwin]
+        arch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
+          go-version: "stable"
 
-      - name: Build for multiple platforms
+      - name: Build Binary
         run: |
-          # Linux
-          GOOS=linux GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-linux-amd64
-          GOOS=linux GOARCH=arm64 go build -v -ldflags="-s -w" -o cnlookup-linux-arm64
+          export GOOS=${{ matrix.os }}
+          export GOARCH=${{ matrix.arch }}
+          BINARY_NAME="cnlookup-${GOOS}-${GOARCH}"
+          [[ "$GOOS" == "windows" ]] && BINARY_NAME+=".exe"
+          go build -v -ldflags="-s -w" -o $BINARY_NAME
 
-          # Windows
-          GOOS=windows GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-windows-amd64.exe
-
-          # macOS
-          GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w" -o cnlookup-darwin-amd64
-          GOOS=darwin GOARCH=arm64 go build -v -ldflags="-s -w" -o cnlookup-darwin-arm64
-
-      - name: Generate checksums
+      - name: Package Binary
         run: |
-          sha256sum cnlookup-* > SHA256SUMS.txt
+          BINARY_NAME="cnlookup-${{ matrix.os }}-${{ matrix.arch }}"
+          [[ "${{ matrix.os }}" == "windows" ]] && BINARY_NAME+=".exe"
+          tar -czvf "${BINARY_NAME}.tar.gz" "$BINARY_NAME"
 
-      - name: Create Release
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: "*.tar.gz"
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: .
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: |
-            cnlookup-linux-amd64
-            cnlookup-linux-arm64
-            cnlookup-windows-amd64.exe
-            cnlookup-darwin-amd64
-            cnlookup-darwin-arm64
-            SHA256SUMS.txt
+          files: "*.tar.gz"
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
